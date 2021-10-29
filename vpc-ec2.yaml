@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Lab template of creating a VPC ANd EC2
+
+# Lab VPC with private subnet, Internet Gateway and Security Groups configure to allow SSH from anywhere
+
+Parameters:
+
+  LabVpcCidr:
+    Type: String
+    Default: 10.0.0.0/20
+
+  PrivateSubnetCidr:
+    Type: String
+    Default: 10.0.0.0/24
+
+  SecurityGroup:
+    Type: String
+    Default: 0.0.0.0/0
+
+  AmazonLinuxAMIID:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+  KeyName:
+    Type: String
+    Description: Keyname for the keypair that you will use to connect to the Web Server EC2 instance
+    Default: default-lab-key  
+Resources:
+# VPC, Internet Gateaway   and Private Subnet
+
+  LabVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref LabVpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: Lab VPC
+
+  IGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Lab IGW
+
+  VPCtoIGWConnection:
+    Type: AWS::EC2::VPCGatewayAttachment
+    DependsOn:
+      - IGW
+      - LabVPC
+    Properties:
+      InternetGatewayId: !Ref IGW
+      VpcId: !Ref LabVPC
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [ 0, !GetAZs ]    # Get the first AZ in the list 
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-Private-A  
+
+  PrivateRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn:
+      - PrivateRouteTable
+      - PrivateSubnet
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet        
+
+#EC2 Instance  
+
+
+  MyInstane:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmazonLinuxAMIID
+      KeyName: !Ref KeyName
+      InstanceType: t2.micro
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !Ref InstanceSecurityGroup
+      SubnetId: !Ref PrivateSubnetA
+      
+  
+
+###########
+# Web Security Group
+###########
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: LabVPC
+    Properties:
+      GroupName: InstanceSecurityGroup
+      GroupDescription: Allow SSH from anywhere
+      VpcId: !Ref LabVPC
+      SecurityGroupIngress:
+  
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: WebServerSG
